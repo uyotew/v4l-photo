@@ -26,28 +26,19 @@ pub fn main() !void {
     const fmt = try v4l.getFormat(dev, .video_capture) orelse
         fatal("{s} has no video_capture format", .{dev_path});
 
-    const reqbufs = try v4l.requestBuffers(dev, .video_capture, .mmap, 2);
-    if (reqbufs.count != 2) fatal("got {} instead of 2 buffers", .{reqbufs.count});
+    const reqbufs = try v4l.requestBuffers(dev, .video_capture, .mmap, 1);
+    if (reqbufs.count != 1) fatal("got {} instead of 1 buffer", .{reqbufs.count});
 
-    const out_qb = try v4l.queryBuffer(dev, .video_capture, .mmap, 0);
-    const in_qb = try v4l.queryBuffer(dev, .video_capture, .mmap, 1);
+    const qb = try v4l.queryBuffer(dev, .video_capture, .mmap, 0);
 
     const rw = std.os.linux.PROT.READ | std.os.linux.PROT.WRITE;
-    const mem1 = try std.posix.mmap(null, out_qb.length, rw, .{ .TYPE = .SHARED }, dev.handle, out_qb.m.offset);
-    defer std.posix.munmap(mem1);
-    const mem2 = try std.posix.mmap(null, in_qb.length, rw, .{ .TYPE = .SHARED }, dev.handle, in_qb.m.offset);
-    defer std.posix.munmap(mem2);
+    const mem = try std.posix.mmap(null, qb.length, rw, .{ .TYPE = .SHARED }, dev.handle, qb.m.offset);
+    defer std.posix.munmap(mem);
 
     _ = try v4l.queueBuffer(dev, .video_capture, .mmap, 0);
-    _ = try v4l.queueBuffer(dev, .video_capture, .mmap, 1);
-
     try v4l.startStreaming(dev, .video_capture);
-
-    const dequeued = try v4l.dequeueBuffer(dev, .video_capture, .mmap);
-
+    _ = try v4l.dequeueBuffer(dev, .video_capture, .mmap);
     try v4l.stopStreaming(dev, .video_capture);
-
-    const mem = if (dequeued.index == 0) mem1 else mem2;
 
     try stdout.print("captured image has pix_fmt: {t}, size: {}x{}\n", .{ fmt.pixelformat, fmt.width, fmt.height });
     try stdout.print("saving image to img.raw\n", .{});
